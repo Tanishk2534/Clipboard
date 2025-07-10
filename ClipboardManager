@@ -1,0 +1,110 @@
+import java.awt.*;
+import java.awt.datatransfer.*;
+import java.io.*;
+import java.util.*;
+import javax.swing.*;
+
+public class ClipboardManager {
+    private static LinkedList<String> history = new LinkedList<>();
+    private static final int MAX_HISTORY_SIZE = 20;
+    private static final String HISTORY_FILE = "clipboard_history.txt";
+
+    public static void main(String[] args) {
+        loadHistory();
+        startClipboardMonitor();
+        createGUI();
+    }
+
+    private static void startClipboardMonitor() {
+        java.util.Timer timer = new java.util.Timer();
+
+        timer.schedule(new TimerTask() {
+            String last = "";
+
+            public void run() {
+                String current = getClipboardContents();
+                if (current != null && !current.equals(last)) {
+                    last = current;
+                    addToHistory(current);
+                    saveHistory();
+                }
+            }
+        }, 0, 1000);
+    }
+
+    private static void addToHistory(String text) {
+        history.remove(text); // Avoid duplicates
+        history.addFirst(text);
+        if (history.size() > MAX_HISTORY_SIZE) {
+            history.removeLast();
+        }
+    }
+
+    private static void saveHistory() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(HISTORY_FILE))) {
+            for (String item : history) {
+                writer.write(item);
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void loadHistory() {
+        File file = new File(HISTORY_FILE);
+        if (file.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    history.add(line);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static void createGUI() {
+        JFrame frame = new JFrame("Clipboard History");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        DefaultListModel<String> listModel = new DefaultListModel<>();
+        for (String item : history) {
+            listModel.addElement(item);
+        }
+        JList<String> list = new JList<>(listModel);
+        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JButton pasteButton = new JButton("Paste Selected");
+        pasteButton.addActionListener(e -> {
+            String selected = list.getSelectedValue();
+            if (selected != null) {
+                setClipboardContents(selected);
+            }
+        });
+
+        frame.add(new JScrollPane(list), BorderLayout.CENTER);
+        frame.add(pasteButton, BorderLayout.SOUTH);
+        frame.setSize(400, 300);
+        frame.setVisible(true);
+    }
+
+    private static String getClipboardContents() {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            Transferable contents = clipboard.getContents(null);
+            if (contents != null && contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                return (String) contents.getTransferData(DataFlavor.stringFlavor);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private static void setClipboardContents(String str) {
+        StringSelection selection = new StringSelection(str);
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(selection, null);
+    }
+}
